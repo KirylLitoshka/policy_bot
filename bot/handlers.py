@@ -2,7 +2,8 @@ import asyncio
 
 from aiogram import types
 from aiogram.dispatcher import FSMContext
-from bot.profiles import Profile, User
+from bot.profiles import Profile
+from bot.utils import build_policy, build_terms_of_use
 
 ACTIVITY_FIELDS = [
     "Разработчик",
@@ -99,21 +100,41 @@ async def process_application_name(message: types.Message, state: FSMContext):
 async def process_email(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
         data["mail"] = message.text
+        document_type = data.get("document_type")
+        if not document_type:
+            raise
     await state.set_state("*")
+    if document_type == "policy":
+        return await create_privacy_policy(message, state)
+    elif document_type == "terms":
+        return await create_terms_of_use(message, state)
+
+
+async def set_user_name(message):
+    await Profile.name.set()
+    await message.answer("Введите ваше имя:", reply_markup=types.ReplyKeyboardRemove())
 
 
 async def create_privacy_policy(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
         if "name" not in data:
-            await Profile.name.set()
-            return await message.answer("Введите ваше имя:", reply_markup=types.ReplyKeyboardRemove())
+            data["document_type"] = "policy"
+            return await set_user_name(message)
+        user_data = data.as_dict()
+        policy_link = await build_terms_of_use(user_data)
+        data["policy_link"] = policy_link
+        await message.answer(policy_link)
 
 
 async def create_terms_of_use(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
         if "name" not in data:
-            await Profile.name.set()
-            return await message.answer("Введите ваше имя:", reply_markup=types.ReplyKeyboardRemove())
+            data["document_type"] = "terms"
+            return await set_user_name(message)
+        user_data = data.as_dict()
+        terms_link = await build_terms_of_use(user_data)
+        data["terms_link"] = terms_link
+        await message.answer(terms_link)
 
 
 async def process_error(message: types.Message):

@@ -1,7 +1,7 @@
 from aiogram import Dispatcher, Bot, executor
 from aiogram.contrib.fsm_storage.files import JSONStorage
 from bot.settings import BOT_STORAGE
-from bot.utils import on_startup, on_shutdown
+from bot.dispatcher import on_startup, on_shutdown
 
 
 def start_bot():
