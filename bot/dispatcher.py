@@ -1,10 +1,14 @@
-from bot.handlers import *
 from bot.utils import get_google_token
+from bot.handlers import *
 
 
 async def on_startup(dp):
     dp.data['google_api_key'] = get_google_token()
     dp.register_message_handler(cmd_start, commands=["start"])
+    dp.register_callback_query_handler(finish, lambda msg: msg.data == "finish", state="*")
+    dp.register_callback_query_handler(
+        create_by_callback_data, lambda msg: msg.data == "privacy" or msg.data == "terms", state="*"
+    )
     dp.register_message_handler(
         process_activity_field, lambda msg: msg.text in ACTIVITY_FIELDS, state=Profile.activity_field
     )
