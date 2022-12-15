@@ -63,48 +63,40 @@ async def process_promo_code(message: types.Message, state: FSMContext):
     await state.set_state("*")
 
 
-async def create_privacy_policy(message, state):
+async def create_files(message, state):
     current_state = await state.get_state()
     if current_state != "*":
         return await message.delete()
+
+    if "terms" in message.text.lower():
+        callback = build_terms_of_use
+        document_type = "terms"
+        output_message = "Желаете создать Privacy Policy?"
+    elif "privacy" in message.text.lower():
+        callback = build_policy
+        document_type = "privacy"
+        output_message = "Желаете создать Terms of Use?"
+    else:
+        raise
+
     async with state.proxy() as data:
         if "name" not in data:
-            data["document_type"] = "policy"
+            data["document_type"] = document_type
             return await set_user_name(message)
         user_data = data.as_dict()
         del data["name"]
-    policy_link = await build_policy(user_data)
-    await message.answer(policy_link)
-    await asyncio.sleep(2)
-    keyboard = types.InlineKeyboardMarkup(
-        inline_keyboard=[[
-            types.InlineKeyboardButton("Да", callback_data="terms"),
-            types.InlineKeyboardButton("Нет", callback_data="finish")
-        ]]
-    )
-    return await message.answer("Желаете создать Terms of Use?", reply_markup=keyboard)
 
+    terms_link = await callback(user_data)
 
-async def create_terms_of_use(message, state):
-    current_state = await state.get_state()
-    if current_state != "*":
-        return await message.delete()
-    async with state.proxy() as data:
-        if "name" not in data:
-            data["document_type"] = "terms"
-            return await set_user_name(message)
-        user_data = data.as_dict()
-        del data["name"]
-    terms_link = await build_terms_of_use(user_data)
     await message.answer(terms_link)
-    await asyncio.sleep(2)
+    await asyncio.sleep(1)
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[[
-            types.InlineKeyboardButton("Да", callback_data="privacy"),
+            types.InlineKeyboardButton("Да", callback_data=document_type),
             types.InlineKeyboardButton("Нет", callback_data="finish")
         ]]
     )
-    return await message.answer("Желаете создать Privacy Policy?", reply_markup=keyboard)
+    return await message.answer(output_message, reply_markup=keyboard)
 
 
 async def set_user_name(message):
@@ -133,12 +125,9 @@ async def process_email(message: types.Message, state: FSMContext):
         data["mail"] = message.text
         if not data.get("document_type"):
             raise
-        document_type = data.pop("document_type")
+        message.text = data.pop("document_type")
         await state.set_state("*")
-    if document_type == "policy":
-        return await create_privacy_policy(message, state)
-    elif document_type == "terms":
-        return await create_terms_of_use(message, state)
+    return await create_files(message, state)
 
 
 async def process_error(message: types.Message):
@@ -151,18 +140,15 @@ async def process_error(message: types.Message):
 
 
 async def create_by_callback_data(query, state):
-    if query.data == "terms":
-        return await create_terms_of_use(query.message, state)
-    elif query.data == 'privacy':
-        return await create_privacy_policy(query.message, state)
+    return await create_files(query.message, state)
 
 
 async def finish(query, state):
     await state.set_state("*")
     final_message = """
-        и в сообщении в конце мы говорим "Ваш документ готов. Вы можете создать и другие документы:
-        ✔️Privacy Policy при помощи команды /privacy
-        ✔️Terms of use при помощи команды /terms
+Ваш документ готов. Вы можете создать и другие документы:
+✔️Privacy Policy при помощи команды /privacy
+✔️Terms of use при помощи команды /terms
     """
     if isinstance(query, types.CallbackQuery):
         await query.message.answer(final_message)
