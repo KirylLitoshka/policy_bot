@@ -1,9 +1,10 @@
 import aiohttp
 import shortuuid
+from bot.settings import SITE_DOMAIN, SITE_ID
 
 
 async def create_new_version(endpoint, session):
-    async with session.post(f"{endpoint}/v1beta1/sites/clean-feat-370708/versions") as resp:
+    async with session.post(f"{endpoint}/v1beta1/sites/{SITE_ID}/versions") as resp:
         response_data = await resp.json()
         if response_data["status"] != "CREATED":
             raise
@@ -12,7 +13,7 @@ async def create_new_version(endpoint, session):
 
 
 async def get_uploaded_hashes(session, endpoint, version, file_hash, user_url):
-    post_url = f"{endpoint}/v1beta1/sites/clean-feat-370708/versions/{version}:populateFiles"
+    post_url = f"{endpoint}/v1beta1/sites/{SITE_ID}/versions/{version}:populateFiles"
     post_data = {"files": {f"/{user_url}": file_hash}}
     async with session.post(url=post_url, json=post_data) as resp:
         response_data = await resp.json()
@@ -25,13 +26,13 @@ async def upload_hashed_data(data, headers, gzip_file):
     async with aiohttp.ClientSession(headers=headers) as session:
         for upload_hash in data["uploadRequiredHashes"]:
             url = f"{data['uploadUrl']}/{upload_hash}"
-            async with session.post(url, data=gzip_file) as resp:
-                status = resp.status
-                print(status)
+            async with session.post(url, data=gzip_file) as response:
+                if response.status != 200:
+                    raise
 
 
 async def update_version_status(endpoint, session, version):
-    patch_url = f"{endpoint}/v1beta1/sites/clean-feat-370708/versions/{version}?update_mask=status"
+    patch_url = f"{endpoint}/v1beta1/sites/{SITE_ID}/versions/{version}?update_mask=status"
     patch_data = {"status": "FINALIZED"}
     async with session.patch(url=patch_url, json=patch_data) as resp:
         response_data = await resp.json()
@@ -40,16 +41,16 @@ async def update_version_status(endpoint, session, version):
 
 
 async def deploy_current_version(endpoint, session, version):
-    deploy_url = f"{endpoint}/v1beta1/sites/clean-feat-370708/releases?versionName=sites/clean-feat-370708/versions/{version}"
-    async with session.post(deploy_url) as resp:
-        print(resp.status)
+    deploy_url = f"{endpoint}/v1beta1/sites/{SITE_ID}/releases?versionName=sites/clean-feat-370708/versions/{version}"
+    async with session.post(deploy_url) as response:
+        if response.status != 200:
+            raise
 
 
 async def get_latest_version(session, endpoint):
-    url = f"{endpoint}/v1beta1/sites/clean-feat-370708/versions"
+    url = f"{endpoint}/v1beta1/sites/{SITE_ID}/versions"
     async with session.get(url) as resp:
         versions_list = await resp.json()
-        print(versions_list)
         finalized_versions_list = [version for version in versions_list["versions"] if version["status"] == "FINALIZED"]
         if not finalized_versions_list:
             return None
@@ -57,9 +58,9 @@ async def get_latest_version(session, endpoint):
 
 
 async def clone_version(session, endpoint, version):
-    url = f'{endpoint}/v1beta1/sites/clean-feat-370708/versions:clone'
+    url = f'{endpoint}/v1beta1/sites/{SITE_ID}/versions:clone'
     post_data = {
-        "sourceVersion": f"sites/clean-feat-370708/versions/{version}"
+        "sourceVersion": f"sites/{SITE_ID}/versions/{version}"
     }
     async with session.post(url, json=post_data) as response:
         response_data = await response.json()
@@ -101,4 +102,4 @@ async def create_page(token, file_hash, gzip_file, user):
         await upload_hashed_data(preloaded_data, headers, gzip_file)
         await update_version_status(endpoint, session, version)
         await deploy_current_version(endpoint, session, version)
-    return f"https://clean-feat-370708.web.app/{user_url}"
+    return f"{SITE_DOMAIN}/{user_url}"
