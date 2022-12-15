@@ -7,8 +7,10 @@ async def on_startup(dp):
     await set_bot_commands(dp)
     dp.data['google_api_key'] = get_google_token()
     dp.register_message_handler(cmd_start, commands=["start"])
-    dp.register_message_handler(create_terms_of_use, commands=["terms"], state="*")
-    dp.register_message_handler(create_privacy_policy, commands=["privacy"], state="*")
+    dp.register_message_handler(create_files, commands=["terms"], state="*")
+    dp.register_message_handler(create_files, commands=["privacy"], state="*")
+    dp.register_message_handler(create_files, lambda msg: msg.text == "Создать Terms of Use", state="*")
+    dp.register_message_handler(create_files, lambda msg: msg.text == "Создать Privacy Policy", state="*")
     dp.register_callback_query_handler(finish, lambda msg: msg.data == "finish", state="*")
     dp.register_callback_query_handler(
         create_by_callback_data, lambda msg: msg.data == "privacy" or msg.data == "terms", state="*"
@@ -29,8 +31,6 @@ async def on_startup(dp):
     dp.register_message_handler(process_application_name, state=User.application_name)
     dp.register_message_handler(process_email, state=User.mail)
     dp.register_message_handler(process_promo_code, state=Profile.promo_code)
-    dp.register_message_handler(create_terms_of_use, lambda msg: msg.text == "Создать Terms of Use", state="*")
-    dp.register_message_handler(create_privacy_policy, lambda msg: msg.text == "Создать Privacy Policy", state="*")
 
 
 async def on_shutdown(dp):
