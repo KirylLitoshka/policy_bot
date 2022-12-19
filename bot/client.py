@@ -51,7 +51,7 @@ async def get_latest_version(session, endpoint):
     url = f"{endpoint}/v1beta1/sites/{SITE_ID}/versions"
     async with session.get(url) as resp:
         versions_list = await resp.json()
-        if not versions_list:
+        if "versions" not in versions_list:
             return None
         finalized_versions_list = [version for version in versions_list["versions"] if version["status"] == "FINALIZED"]
         if not finalized_versions_list:
