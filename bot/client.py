@@ -41,7 +41,7 @@ async def update_version_status(endpoint, session, version):
 
 
 async def deploy_current_version(endpoint, session, version):
-    deploy_url = f"{endpoint}/v1beta1/sites/{SITE_ID}/releases?versionName=sites/clean-feat-370708/versions/{version}"
+    deploy_url = f"{endpoint}/v1beta1/sites/{SITE_ID}/releases?versionName=sites/{SITE_ID}/versions/{version}"
     async with session.post(deploy_url) as response:
         if response.status != 200:
             raise
@@ -51,6 +51,8 @@ async def get_latest_version(session, endpoint):
     url = f"{endpoint}/v1beta1/sites/{SITE_ID}/versions"
     async with session.get(url) as resp:
         versions_list = await resp.json()
+        if not versions_list:
+            return None
         finalized_versions_list = [version for version in versions_list["versions"] if version["status"] == "FINALIZED"]
         if not finalized_versions_list:
             return None
