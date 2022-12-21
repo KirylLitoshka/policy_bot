@@ -1,4 +1,6 @@
 import asyncio
+from typing import Union
+
 from aiogram import types
 from aiogram.dispatcher import FSMContext
 from bot.profiles import Profile, User
@@ -27,6 +29,7 @@ async def process_activity_field(message: types.Message, state: FSMContext):
     """
     async with state.proxy() as data:
         data['activity_field'] = message.text
+        data["user_id"] = str(message.from_user.id)
 
     await Profile.next()
     await asyncio.sleep(1)
@@ -50,7 +53,17 @@ async def process_promo_code(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
         data["promo_code"] = message.text
     await message.answer("Спасибо за прохождение анкетирования!")
+    await main_menu(message, state)
+
+
+async def main_menu(message: Union[types.Message, types.CallbackQuery], state: FSMContext):
     await asyncio.sleep(1)
+    async with state.proxy() as data:
+        data.pop("is_policy_created", None)
+        data.pop("is_terms_created", None)
+        data.pop("name", None)
+    if isinstance(message, types.CallbackQuery):
+        message = message.message
     keyboard = types.ReplyKeyboardMarkup(
         keyboard=[
             [types.KeyboardButton(text="Создать Privacy Policy")],
@@ -59,47 +72,86 @@ async def process_promo_code(message: types.Message, state: FSMContext):
         resize_keyboard=True,
         one_time_keyboard=True
     )
+
     await message.answer("Продолжите фразу: «Сегодня я хочу...»", reply_markup=keyboard)
     await state.set_state("*")
 
 
-async def create_files(message, state):
+async def create_terms_of_use(message: types.Message, state: FSMContext):
     current_state = await state.get_state()
     if current_state != "*":
         return await message.delete()
 
-    if "terms" in message.text.lower():
-        callback = build_terms_of_use
-        document_type = "terms"
-        output_message = "Желаете создать Privacy Policy?"
-    elif "privacy" in message.text.lower():
-        callback = build_policy
-        document_type = "privacy"
-        output_message = "Желаете создать Terms of Use?"
-    else:
-        raise
-
     async with state.proxy() as data:
+        data["current_document_type"] = "terms"
+        data["is_terms_created"] = False
+        user_id = data['user_id']
+        if data.get("is_terms_created"):
+            del data['name']
         if "name" not in data:
-            data["document_type"] = document_type
             return await set_user_name(message)
         user_data = data.as_dict()
-        del data["name"]
+        terms_link = await build_terms_of_use(user_data)
+        if not terms_link:
+            raise
+        data["is_terms_created"] = True
 
-    terms_link = await callback(user_data)
-
-    await message.answer(terms_link)
+    await message.bot.send_message(user_id, terms_link)
     await asyncio.sleep(1)
-    keyboard = types.InlineKeyboardMarkup(
-        inline_keyboard=[[
-            types.InlineKeyboardButton("Да", callback_data=document_type),
-            types.InlineKeyboardButton("Нет", callback_data="finish")
-        ]]
+    await final_message(message, state)
+
+
+async def create_privacy_policy(message: Union[types.Message, types.CallbackQuery], state: FSMContext):
+    if isinstance(message, types.CallbackQuery):
+        message = message.message
+    current_state = await state.get_state()
+    if current_state != "*":
+        return await message.delete()
+
+    async with state.proxy() as data:
+        user_id = data['user_id']
+        data["current_document_type"] = "policy"
+        data["is_policy_created"] = False
+        if data.get("is_policy_created"):
+            del data["name"]
+        if "name" not in data:
+            return await set_user_name(message)
+        user_data = data.as_dict()
+        policy_link = await build_policy(user_data)
+        if not policy_link:
+            raise
+        data["is_policy_created"] = True
+
+    await message.bot.send_message(user_id, policy_link)
+    await asyncio.sleep(1)
+    await final_message(message, state)
+
+
+async def final_message(message: Union[types.Message, types.CallbackQuery], state: FSMContext):
+    if isinstance(message, types.CallbackQuery):
+        message = message.message
+    async with state.proxy() as data:
+        is_policy_created = data.get("is_policy_created")
+        is_terms_created = data.get("is_terms_created")
+        if is_policy_created and is_terms_created:
+            return await main_menu(message, state)
+        elif is_policy_created:
+            output_message = "Желаете создать Terms of Use?"
+            callback_data = "terms"
+        elif is_terms_created:
+            output_message = "Желаете создать Privacy Policy?"
+            callback_data = "privacy"
+
+    await message.answer(
+        text=output_message,
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[
+            types.InlineKeyboardButton("Да", callback_data=callback_data),
+            types.InlineKeyboardButton("Нет", callback_data="menu")
+        ]])
     )
-    return await message.answer(output_message, reply_markup=keyboard)
 
 
-async def set_user_name(message):
+async def set_user_name(message: types.Message):
     await User.name.set()
     await message.answer("Введите ваше имя:", reply_markup=types.ReplyKeyboardRemove())
 
@@ -123,11 +175,12 @@ async def process_application_name(message: types.Message, state: FSMContext):
 async def process_email(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
         data["mail"] = message.text
-        if not data.get("document_type"):
-            raise
-        message.text = data.pop("document_type")
+        current_document = data["current_document_type"]
         await state.set_state("*")
-    return await create_files(message, state)
+    if current_document == "terms":
+        return await create_terms_of_use(message, state)
+    elif current_document == "policy":
+        return await create_privacy_policy(message, state)
 
 
 async def process_error(message: types.Message):
@@ -137,20 +190,3 @@ async def process_error(message: types.Message):
     :return coroutine:
     """
     return await message.delete()
-
-
-async def create_by_callback_data(query, state):
-    return await create_files(query.message, state)
-
-
-async def finish(query, state):
-    await state.set_state("*")
-    final_message = """
-Ваш документ готов. Вы можете создать и другие документы:
-✔️Privacy Policy при помощи команды /privacy
-✔️Terms of use при помощи команды /terms
-    """
-    if isinstance(query, types.CallbackQuery):
-        await query.message.answer(final_message)
-    else:
-        await query.answer(final_message)
