@@ -153,7 +153,7 @@ async def final_message(message: Union[types.Message, types.CallbackQuery], stat
 
 async def set_user_name(message: types.Message):
     await User.name.set()
-    await message.answer("Введите ваше имя:", reply_markup=types.ReplyKeyboardRemove())
+    await message.answer("Введите имя разработчика:", reply_markup=types.ReplyKeyboardRemove())
 
 
 async def process_username(message: types.Message, state: FSMContext):
