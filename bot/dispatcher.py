@@ -1,12 +1,15 @@
 from bot.commands import cmd_start, set_bot_commands
 from bot.utils import get_google_token
 from bot.handlers import *
+from bot.storage import load_users
+from bot.settings import STORAGE_DIR
 from aiogram import Dispatcher
 
 
 async def on_startup(dp):
     await set_bot_commands(dp)
     dp.data['google_api_key'] = get_google_token()
+    dp.data["users"] = load_users(STORAGE_DIR)
     dp.register_message_handler(cmd_start, commands=["start"])
     dp.register_message_handler(create_terms_of_use, commands=["terms"], state="*")
     dp.register_message_handler(create_privacy_policy, commands=["privacy"], state="*")

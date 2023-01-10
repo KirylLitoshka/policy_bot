@@ -8,6 +8,13 @@ import gzip
 import hashlib
 
 
+def get_referral_type(message: str):
+    sequence = message.split()
+    if len(sequence) > 1:
+        return sequence[1]
+    return None
+
+
 async def prepare_text_data(user, file_name):
     file_path = os.path.join(FILES_DIR, file_name)
     async with aiofiles.open(file_path) as file:

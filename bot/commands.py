@@ -2,6 +2,7 @@ import asyncio
 from aiogram import types
 from bot.profiles import Profile
 from bot.handlers import ACTIVITY_FIELDS
+from bot.storage import create_new_user
 
 
 async def set_bot_commands(dispatcher):  # dispatcher: Dispatcher
@@ -14,6 +15,7 @@ async def set_bot_commands(dispatcher):  # dispatcher: Dispatcher
 
 
 async def cmd_start(message: types.Message):
+    await create_new_user(message)
     await message.answer("Здравствуйте! Для старта работы просим пройти анкетирование")
     await asyncio.sleep(1)
     await Profile.activity_field.set()
